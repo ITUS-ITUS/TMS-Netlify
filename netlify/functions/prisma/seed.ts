@@ -120,6 +120,85 @@ async function main() {
   });
 
   console.log('✅ Demo users created');
+
+  // Get created users for task assignment
+  const adminUser = await prisma.user.findUnique({ where: { email: 'admin@admin.com' } });
+  const managerUser = await prisma.user.findUnique({ where: { email: 'manager@example.com' } });
+  const regularUser = await prisma.user.findUnique({ where: { email: 'user@example.com' } });
+
+  // Create demo tasks
+  const demoTasks = [
+    {
+      title: 'Setup Project Infrastructure',
+      description: 'Configure development environment, CI/CD pipeline, and deployment scripts',
+      status: 'COMPLETED',
+      priority: 'HIGH',
+      userId: adminUser!.id,
+      assignedTo: adminUser!.id
+    },
+    {
+      title: 'Design Database Schema',
+      description: 'Create ERD and define all database tables, relationships, and indexes',
+      status: 'COMPLETED',
+      priority: 'HIGH',
+      userId: adminUser!.id,
+      assignedTo: managerUser!.id
+    },
+    {
+      title: 'Implement User Authentication',
+      description: 'Add JWT-based authentication with login, register, and token refresh',
+      status: 'IN_PROGRESS',
+      priority: 'HIGH',
+      userId: managerUser!.id,
+      assignedTo: regularUser!.id
+    },
+    {
+      title: 'Create Task Management API',
+      description: 'Build CRUD endpoints for tasks with proper validation and error handling',
+      status: 'IN_PROGRESS',
+      priority: 'MEDIUM',
+      userId: managerUser!.id,
+      assignedTo: managerUser!.id
+    },
+    {
+      title: 'Build Dashboard UI',
+      description: 'Design and implement the main dashboard with task statistics and filters',
+      status: 'TODO',
+      priority: 'MEDIUM',
+      userId: adminUser!.id,
+      assignedTo: regularUser!.id
+    },
+    {
+      title: 'Add Role-Based Access Control',
+      description: 'Implement RBAC system with admin, manager, and user roles',
+      status: 'TODO',
+      priority: 'HIGH',
+      userId: adminUser!.id,
+      assignedTo: managerUser!.id
+    },
+    {
+      title: 'Write Unit Tests',
+      description: 'Create comprehensive test suite for all API endpoints',
+      status: 'TODO',
+      priority: 'LOW',
+      userId: managerUser!.id,
+      assignedTo: regularUser!.id
+    },
+    {
+      title: 'Documentation',
+      description: 'Write API documentation and user guide for the application',
+      status: 'TODO',
+      priority: 'LOW',
+      userId: regularUser!.id,
+      assignedTo: regularUser!.id
+    }
+  ];
+
+  for (const task of demoTasks) {
+    await prisma.task.create({ data: task });
+  }
+
+  console.log('✅ Demo tasks created');
   console.log('');
   console.log('📋 Demo Credentials:');
   console.log('   Admin:   admin@admin.com / admin123');

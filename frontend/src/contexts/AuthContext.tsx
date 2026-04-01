@@ -130,8 +130,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return permissions.some(p => hasPermission(p));
   };
 
-  const isAdmin = user?.role.name === 'Admin';
-  const isManager = user?.role.name === 'Manager';
+  const isAdmin = user?.role.name === 'admin';
+  const isManager = user?.role.name === 'manager';
 
   return (
     <AuthContext.Provider value={{

@@ -92,10 +92,19 @@ app.post('/api/auth/register', [
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
       data: { email, username, password: hashedPassword, roleId: roleId || 3 },
-      include: { role: true }
+      include: { role: { include: { permissions: { include: { permission: true } } } } }
     });
     const token = generateToken(user.id, user.roleId, user.role.name);
-    res.status(201).json({ token, user: { id: user.id, email: user.email, username: user.username, role: user.role } });
+    const permissions = user.role.permissions.map(p => p.permission.name);
+    res.status(201).json({ 
+      token, 
+      user: { 
+        id: user.id, 
+        email: user.email, 
+        username: user.username, 
+        role: { id: user.role.id, name: user.role.name, permissions } 
+      } 
+    });
   } catch (error) {
     console.error('Register error:', error);
     res.status(500).json({ message: 'Error creating user' });
@@ -117,7 +126,21 @@ app.post('/api/auth/login', [
       return res.status(401).json({ message: 'Invalid credentials' });
     }
     const token = generateToken(user.id, user.roleId, user.role.name);
-    res.json({ token, user: { id: user.id, email: user.email, username: user.username, role: user.role } });
+    // Transform permissions to array of strings for frontend
+    const permissions = user.role.permissions.map(p => p.permission.name);
+    res.json({ 
+      token, 
+      user: { 
+        id: user.id, 
+        email: user.email, 
+        username: user.username, 
+        role: { 
+          id: user.role.id, 
+          name: user.role.name, 
+          permissions 
+        } 
+      } 
+    });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ message: 'Error logging in' });
@@ -130,7 +153,21 @@ app.get('/api/auth/me', authenticate, async (req: any, res: Response) => {
     where: { id: req.user.id },
     include: { role: { include: { permissions: { include: { permission: true } } } } }
   });
-  res.json({ user });
+  if (!user) return res.status(404).json({ message: 'User not found' });
+  // Transform permissions to array of strings for frontend
+  const permissions = user.role.permissions.map(p => p.permission.name);
+  res.json({ 
+    user: { 
+      id: user.id, 
+      email: user.email, 
+      username: user.username, 
+      role: { 
+        id: user.role.id, 
+        name: user.role.name, 
+        permissions 
+      } 
+    } 
+  });
 });
 
 // Impersonate User (Admin only)
@@ -139,11 +176,20 @@ app.post('/api/auth/impersonate/:userId', authenticate, isAdmin, async (req: any
     const targetUserId = parseInt(req.params.userId);
     const targetUser = await prisma.user.findUnique({
       where: { id: targetUserId },
-      include: { role: true }
+      include: { role: { include: { permissions: { include: { permission: true } } } } }
     });
     if (!targetUser) return res.status(404).json({ message: 'User not found' });
     const token = generateToken(targetUser.id, targetUser.roleId, targetUser.role.name);
-    res.json({ token, user: { id: targetUser.id, email: targetUser.email, username: targetUser.username, role: targetUser.role } });
+    const permissions = targetUser.role.permissions.map(p => p.permission.name);
+    res.json({ 
+      token, 
+      user: { 
+        id: targetUser.id, 
+        email: targetUser.email, 
+        username: targetUser.username, 
+        role: { id: targetUser.role.id, name: targetUser.role.name, permissions } 
+      } 
+    });
   } catch (error) {
     res.status(500).json({ message: 'Error impersonating user' });
   }
@@ -154,17 +200,44 @@ app.post('/api/auth/impersonate/:userId', authenticate, isAdmin, async (req: any
 // Get Tasks
 app.get('/api/tasks', authenticate, async (req: any, res: Response) => {
   try {
+    const { status } = req.query;
     const where: any = req.user.role.name === 'admin' ? {} : 
       req.user.role.name === 'manager' ? {} : 
       { OR: [{ userId: req.user.id }, { assignedTo: req.user.id }] };
+    
+    // Add status filter if provided
+    if (status) {
+      where.status = status;
+    }
+    
     const tasks = await prisma.task.findMany({
       where,
       include: { user: { select: { id: true, username: true, email: true } }, assignee: { select: { id: true, username: true, email: true } } },
       orderBy: { createdAt: 'desc' }
     });
-    res.json(tasks);
+    res.json({ tasks });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching tasks' });
+  }
+});
+
+// Get Task Stats
+app.get('/api/tasks/stats', authenticate, async (req: any, res: Response) => {
+  try {
+    const where: any = req.user.role.name === 'admin' ? {} : 
+      req.user.role.name === 'manager' ? {} : 
+      { OR: [{ userId: req.user.id }, { assignedTo: req.user.id }] };
+    
+    const [total, todo, inProgress, completed] = await Promise.all([
+      prisma.task.count({ where }),
+      prisma.task.count({ where: { ...where, status: 'TODO' } }),
+      prisma.task.count({ where: { ...where, status: 'IN_PROGRESS' } }),
+      prisma.task.count({ where: { ...where, status: 'COMPLETED' } })
+    ]);
+    
+    res.json({ stats: { total, todo, inProgress, completed } });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching stats' });
   }
 });
 
