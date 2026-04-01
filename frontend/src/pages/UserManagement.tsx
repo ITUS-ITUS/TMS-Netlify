@@ -73,7 +73,7 @@ export default function UserManagement() {
     setEmail('');
     setUsername('');
     setPassword('');
-    setRoleId(roles.find(r => r.name === 'User')?.id || 0);
+    setRoleId(roles.find(r => r.name.toLowerCase() === 'user')?.id || 0);
     setFormError('');
     setEditingUser(null);
   };
@@ -151,9 +151,9 @@ export default function UserManagement() {
   };
 
   const getRoleBadgeColor = (roleName: string) => {
-    switch (roleName) {
-      case 'Admin': return 'bg-purple-100 text-purple-700';
-      case 'Manager': return 'bg-blue-100 text-blue-700';
+    switch (roleName.toLowerCase()) {
+      case 'admin': return 'bg-purple-100 text-purple-700';
+      case 'manager': return 'bg-blue-100 text-blue-700';
       default: return 'bg-gray-100 text-gray-700';
     }
   };
@@ -259,7 +259,7 @@ export default function UserManagement() {
                       </td>
                       {isAdmin && (
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm space-x-2">
-                          {user.id !== currentUser?.id && user.role.name !== 'Admin' && (
+                          {user.id !== currentUser?.id && user.role.name.toLowerCase() !== 'admin' && (
                             <button
                               onClick={() => setImpersonateConfirm(user)}
                               className="text-green-600 hover:text-green-900"

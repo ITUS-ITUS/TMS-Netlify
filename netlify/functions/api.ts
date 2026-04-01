@@ -309,21 +309,47 @@ app.delete('/api/tasks/:id', authenticate, hasPermission('delete_task'), async (
 app.get('/api/users', authenticate, hasPermission('read_users'), async (req: any, res: Response) => {
   try {
     const users = await prisma.user.findMany({
-      select: { id: true, email: true, username: true, roleId: true, role: true, createdAt: true }
+      select: { 
+        id: true, 
+        email: true, 
+        username: true, 
+        roleId: true, 
+        role: true, 
+        createdAt: true,
+        _count: {
+          select: {
+            tasks: true,
+            assigned: true
+          }
+        }
+      }
     });
-    res.json(users);
+    res.json({ users });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching users' });
   }
 });
 
-// Get Roles
-app.get('/api/users/roles', authenticate, isAdmin, async (req: any, res: Response) => {
+// Get Roles (must come before /api/users/:id)
+app.get('/api/users/roles', authenticate, async (req: any, res: Response) => {
   try {
     const roles = await prisma.role.findMany({
-      include: { permissions: { include: { permission: true } } }
+      include: { 
+        permissions: { include: { permission: true } },
+        _count: { select: { users: true } }
+      }
     });
-    res.json(roles);
+    
+    // Transform to match frontend expectations
+    const transformedRoles = roles.map(role => ({
+      id: role.id,
+      name: role.name,
+      description: role.description,
+      permissions: role.permissions.map(p => p.permission.name),
+      userCount: role._count.users
+    }));
+    
+    res.json({ roles: transformedRoles });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching roles' });
   }
@@ -364,6 +390,22 @@ app.put('/api/users/:id', authenticate, isAdmin, async (req: any, res: Response)
     res.json({ id: user.id, email: user.email, username: user.username, role: user.role });
   } catch (error) {
     res.status(500).json({ message: 'Error updating user' });
+  }
+});
+
+// Update User Role
+app.put('/api/users/:id/role', authenticate, isAdmin, async (req: any, res: Response) => {
+  try {
+    const userId = parseInt(req.params.id);
+    const { roleId } = req.body;
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { roleId },
+      include: { role: true }
+    });
+    res.json({ id: user.id, email: user.email, username: user.username, role: user.role });
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating user role' });
   }
 });
 
