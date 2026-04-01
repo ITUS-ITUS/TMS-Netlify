@@ -6,13 +6,14 @@ import TaskCard from '../components/tasks/TaskCard';
 import TaskForm from '../components/tasks/TaskForm';
 
 type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'COMPLETED';
+type Priority = 'LOW' | 'MEDIUM' | 'HIGH';
 
 interface Task {
   id: number;
   title: string;
   description?: string;
   status: TaskStatus;
-  priority: string;
+  priority: Priority;
   userId: number;
   user: { id: number; username: string; email: string };
   assignedTo?: number;
