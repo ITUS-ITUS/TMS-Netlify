@@ -7,6 +7,7 @@ export default function Register() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [roleId, setRoleId] = useState(3); // Default to "user" role
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { register } = useAuth();
@@ -29,7 +30,7 @@ export default function Register() {
     setIsLoading(true);
 
     try {
-      await register(email, username, password);
+      await register(email, username, password, roleId);
       navigate('/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Registration failed');
@@ -83,6 +84,21 @@ export default function Register() {
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                 placeholder="johndoe"
               />
+            </div>
+
+            <div>
+              <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1">
+                Account Type
+              </label>
+              <select
+                id="role"
+                value={roleId}
+                onChange={(e) => setRoleId(parseInt(e.target.value))}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+              >
+                <option value={3}>User - Basic task management</option>
+                <option value={2}>Manager - Manage team tasks</option>
+              </select>
             </div>
 
             <div>

@@ -33,7 +33,7 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, username: string, password: string) => Promise<void>;
+  register: (email: string, username: string, password: string, roleId?: number) => Promise<void>;
   logout: () => void;
   impersonateUser: (userId: number) => Promise<void>;
   hasPermission: (permission: string) => boolean;
@@ -94,8 +94,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(user);
   };
 
-  const register = async (email: string, username: string, password: string) => {
-    const response = await api.post<AuthResponse>('/auth/register', { email, username, password });
+  const register = async (email: string, username: string, password: string, roleId?: number) => {
+    const response = await api.post<AuthResponse>('/auth/register', { email, username, password, roleId });
     const { token, user } = response.data;
     
     localStorage.setItem('token', token);
