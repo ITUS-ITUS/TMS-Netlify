@@ -24,14 +24,17 @@ interface TaskCardProps {
 }
 
 export default function TaskCard({ task, onEdit, onDelete, onStatusChange }: TaskCardProps) {
-  const { user, hasPermission, isAdmin, isManager } = useAuth();
+  const { user, hasPermission } = useAuth();
 
   const isOwner = task.userId === user?.id;
   const isAssignee = task.assignedTo === user?.id;
-  // Admin and Manager can edit all tasks, others can edit their own
-  const canEdit = isAdmin || isManager || hasPermission('edit_task') && (isOwner || isAssignee);
-  // Admin and Manager can delete all, others can delete own
-  const canDelete = isAdmin || isManager || (hasPermission('delete_task') && isOwner);
+  const roleName = user?.role?.name?.toLowerCase();
+  const isAdminOrManager = roleName === 'admin' || roleName === 'manager';
+  
+  // Admin and Manager can edit all tasks, users can edit their own or assigned tasks
+  const canEdit = isAdminOrManager || (hasPermission('edit_task') && (isOwner || isAssignee));
+  // Admin and Manager can delete all, users can delete their own
+  const canDelete = isAdminOrManager || (hasPermission('delete_task') && isOwner);
 
   const statusColors = {
     TODO: 'bg-gray-100 text-gray-700',
