@@ -32,9 +32,9 @@ export default function TaskCard({ task, onEdit, onDelete, onStatusChange }: Tas
   const isAdminOrManager = roleName === 'admin' || roleName === 'manager';
   
   // Admin and Manager can edit all tasks, users can edit their own or assigned tasks
-  const canEdit = isAdminOrManager || (hasPermission('edit_task') && (isOwner || isAssignee));
+  const canEdit = isAdminOrManager || (hasPermission('tasks:update:own') && (isOwner || isAssignee));
   // Admin and Manager can delete all, users can delete their own
-  const canDelete = isAdminOrManager || (hasPermission('delete_task') && isOwner);
+  const canDelete = isAdminOrManager || (hasPermission('tasks:delete:own') && isOwner);
 
   const statusColors = {
     TODO: 'bg-gray-100 text-gray-700',

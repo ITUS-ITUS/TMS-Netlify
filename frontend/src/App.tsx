@@ -24,7 +24,7 @@ function App() {
           <Route
             path="/users"
             element={
-              <ProtectedRoute requiredPermissions={['read_users']}>
+              <ProtectedRoute requiredPermissions={['users:read']}>
                 <UserManagement />
               </ProtectedRoute>
             }

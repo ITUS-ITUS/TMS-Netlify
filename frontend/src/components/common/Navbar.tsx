@@ -34,7 +34,7 @@ export default function Navbar() {
                 Dashboard
               </Link>
               
-              {hasPermission('read_users') && (
+              {hasPermission('users:read') && (
                 <Link
                   to="/users"
                   className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${

@@ -67,8 +67,16 @@ const hasPermission = (permission: string) => {
 };
 
 const isAdmin = (req: any, res: Response, next: NextFunction) => {
-  if (req.user?.role?.name !== 'admin') {
+  if (req.user?.role?.name?.toLowerCase() !== 'admin') {
     return res.status(403).json({ message: 'Admin access required' });
+  }
+  next();
+};
+
+const isAdminOrManager = (req: any, res: Response, next: NextFunction) => {
+  const roleName = req.user?.role?.name?.toLowerCase();
+  if (roleName !== 'admin' && roleName !== 'manager') {
+    return res.status(403).json({ message: 'Admin or Manager access required' });
   }
   next();
 };
@@ -201,8 +209,9 @@ app.post('/api/auth/impersonate/:userId', authenticate, isAdmin, async (req: any
 app.get('/api/tasks', authenticate, async (req: any, res: Response) => {
   try {
     const { status } = req.query;
-    const where: any = req.user.role.name === 'admin' ? {} : 
-      req.user.role.name === 'manager' ? {} : 
+    const roleName = req.user.role.name.toLowerCase();
+    const where: any = roleName === 'admin' ? {} : 
+      roleName === 'manager' ? {} : 
       { OR: [{ userId: req.user.id }, { assignedTo: req.user.id }] };
     
     // Add status filter if provided
@@ -224,8 +233,9 @@ app.get('/api/tasks', authenticate, async (req: any, res: Response) => {
 // Get Task Stats
 app.get('/api/tasks/stats', authenticate, async (req: any, res: Response) => {
   try {
-    const where: any = req.user.role.name === 'admin' ? {} : 
-      req.user.role.name === 'manager' ? {} : 
+    const roleName = req.user.role.name.toLowerCase();
+    const where: any = roleName === 'admin' ? {} : 
+      roleName === 'manager' ? {} : 
       { OR: [{ userId: req.user.id }, { assignedTo: req.user.id }] };
     
     const [total, todo, inProgress, completed] = await Promise.all([
@@ -241,14 +251,60 @@ app.get('/api/tasks/stats', authenticate, async (req: any, res: Response) => {
   }
 });
 
+// Get Assignable Users - Admin can assign to all, Manager can only assign to Users
+app.get('/api/tasks/assignable-users', authenticate, isAdminOrManager, async (req: any, res: Response) => {
+  try {
+    const roleName = req.user.role.name.toLowerCase();
+    
+    let where: any = {};
+    if (roleName === 'manager') {
+      // Managers can only assign to Users (not other managers or admins)
+      const userRole = await prisma.role.findFirst({ where: { name: { equals: 'User', mode: 'insensitive' } } });
+      if (userRole) {
+        where.roleId = userRole.id;
+      }
+    }
+    // Admin can assign to all users (no filter)
+    
+    const users = await prisma.user.findMany({
+      where,
+      select: { id: true, username: true, email: true, role: { select: { name: true } } }
+    });
+    
+    res.json({ users });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching assignable users' });
+  }
+});
+
 // Create Task
-app.post('/api/tasks', authenticate, hasPermission('create_task'), [
+app.post('/api/tasks', authenticate, [
   body('title').trim().notEmpty(),
   body('status').optional().isIn(['TODO', 'IN_PROGRESS', 'COMPLETED']),
   body('priority').optional().isIn(['LOW', 'MEDIUM', 'HIGH'])
 ], validate, async (req: any, res: Response) => {
   try {
     const { title, description, status, priority, assignedTo, dueDate } = req.body;
+    const roleName = req.user.role.name.toLowerCase();
+    
+    // Validate assignment permissions
+    if (assignedTo) {
+      if (roleName === 'user') {
+        return res.status(403).json({ message: 'Users cannot assign tasks to others' });
+      }
+      
+      if (roleName === 'manager') {
+        // Check if assignee is a User (not admin or manager)
+        const assignee = await prisma.user.findUnique({
+          where: { id: assignedTo },
+          include: { role: true }
+        });
+        if (assignee && assignee.role.name.toLowerCase() !== 'user') {
+          return res.status(403).json({ message: 'Managers can only assign tasks to Users' });
+        }
+      }
+    }
+    
     const task = await prisma.task.create({
       data: { title, description, status, priority, userId: req.user.id, assignedTo, dueDate: dueDate ? new Date(dueDate) : null },
       include: { user: { select: { id: true, username: true, email: true } }, assignee: { select: { id: true, username: true, email: true } } }
@@ -260,7 +316,7 @@ app.post('/api/tasks', authenticate, hasPermission('create_task'), [
 });
 
 // Update Task
-app.put('/api/tasks/:id', authenticate, hasPermission('edit_task'), [
+app.put('/api/tasks/:id', authenticate, [
   param('id').isInt()
 ], validate, async (req: any, res: Response) => {
   try {
@@ -268,12 +324,33 @@ app.put('/api/tasks/:id', authenticate, hasPermission('edit_task'), [
     const task = await prisma.task.findUnique({ where: { id: taskId } });
     if (!task) return res.status(404).json({ message: 'Task not found' });
     
-    // Check permission
-    if (req.user.role.name !== 'admin' && req.user.role.name !== 'manager' && task.userId !== req.user.id) {
+    const roleName = req.user.role.name.toLowerCase();
+    
+    // Check permission - users can only edit own or assigned tasks
+    if (roleName === 'user' && task.userId !== req.user.id && task.assignedTo !== req.user.id) {
       return res.status(403).json({ message: 'Permission denied' });
     }
     
     const { title, description, status, priority, assignedTo, dueDate } = req.body;
+    
+    // Validate assignment permissions
+    if (assignedTo !== undefined && assignedTo !== task.assignedTo) {
+      if (roleName === 'user') {
+        return res.status(403).json({ message: 'Users cannot assign tasks to others' });
+      }
+      
+      if (roleName === 'manager' && assignedTo !== null) {
+        // Check if new assignee is a User (not admin or manager)
+        const assignee = await prisma.user.findUnique({
+          where: { id: assignedTo },
+          include: { role: true }
+        });
+        if (assignee && assignee.role.name.toLowerCase() !== 'user') {
+          return res.status(403).json({ message: 'Managers can only assign tasks to Users' });
+        }
+      }
+    }
+    
     const updatedTask = await prisma.task.update({
       where: { id: taskId },
       data: { title, description, status, priority, assignedTo, dueDate: dueDate ? new Date(dueDate) : null },
@@ -286,13 +363,16 @@ app.put('/api/tasks/:id', authenticate, hasPermission('edit_task'), [
 });
 
 // Delete Task
-app.delete('/api/tasks/:id', authenticate, hasPermission('delete_task'), async (req: any, res: Response) => {
+app.delete('/api/tasks/:id', authenticate, async (req: any, res: Response) => {
   try {
     const taskId = parseInt(req.params.id);
     const task = await prisma.task.findUnique({ where: { id: taskId } });
     if (!task) return res.status(404).json({ message: 'Task not found' });
     
-    if (req.user.role.name !== 'admin' && req.user.role.name !== 'manager' && task.userId !== req.user.id) {
+    const roleName = req.user.role.name.toLowerCase();
+    
+    // Users can only delete own tasks
+    if (roleName === 'user' && task.userId !== req.user.id) {
       return res.status(403).json({ message: 'Permission denied' });
     }
     
@@ -306,7 +386,7 @@ app.delete('/api/tasks/:id', authenticate, hasPermission('delete_task'), async (
 // ============ USER ROUTES ============
 
 // Get Users
-app.get('/api/users', authenticate, hasPermission('read_users'), async (req: any, res: Response) => {
+app.get('/api/users', authenticate, isAdminOrManager, async (req: any, res: Response) => {
   try {
     const users = await prisma.user.findMany({
       select: { 

@@ -20,6 +20,7 @@ interface UserBasic {
   id: number;
   username: string;
   email: string;
+  role?: { name: string };
 }
 
 interface TaskFormProps {
@@ -29,7 +30,7 @@ interface TaskFormProps {
 }
 
 export default function TaskForm({ task, onSuccess, onCancel }: TaskFormProps) {
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
   const [title, setTitle] = useState(task?.title || '');
   const [description, setDescription] = useState(task?.description || '');
   const [status, setStatus] = useState<TaskStatus>(task?.status || 'TODO');
@@ -40,11 +41,15 @@ export default function TaskForm({ task, onSuccess, onCancel }: TaskFormProps) {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const canAssign = hasPermission('tasks:assign');
+  const roleName = user?.role?.name?.toLowerCase();
+  const canAssign = hasPermission('tasks:assign') || roleName === 'admin' || roleName === 'manager';
 
   useEffect(() => {
     if (canAssign) {
-      api.get('/users').then(res => setUsers(res.data.users)).catch(console.error);
+      // Fetch assignable users based on role permissions
+      api.get('/tasks/assignable-users')
+        .then(res => setUsers(res.data.users))
+        .catch(console.error);
     }
   }, [canAssign]);
 
@@ -155,9 +160,14 @@ export default function TaskForm({ task, onSuccess, onCancel }: TaskFormProps) {
                 >
                   <option value="">Unassigned</option>
                   {users.map(u => (
-                    <option key={u.id} value={u.id}>{u.username} ({u.email})</option>
+                    <option key={u.id} value={u.id}>
+                      {u.username} ({u.email}) {u.role ? `- ${u.role.name}` : ''}
+                    </option>
                   ))}
                 </select>
+                {roleName === 'manager' && (
+                  <p className="text-xs text-gray-500 mt-1">As a Manager, you can only assign tasks to Users</p>
+                )}
               </div>
             )}
 
